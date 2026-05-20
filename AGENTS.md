@@ -22,7 +22,8 @@ Output: `build/connector.js` (ES module for WordPress Script Modules API).
 ### PHPUnit (unit tests)
 
 ```bash
-# Via wp-env (recommended):
+# Via the shared WordPress tests library (recommended):
+npm run test:php:setup
 npm run test:php
 npm run test:php:testdox
 
