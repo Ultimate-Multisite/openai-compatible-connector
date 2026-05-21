@@ -50,6 +50,7 @@ function register_provider(): void {
 	$providers = get_providers();
 	if ( ! empty( $providers ) ) {
 		ProviderFactory::registerAllProviders();
+		mark_connector_configured();
 		return;
 	}
 
@@ -80,6 +81,10 @@ function register_provider(): void {
 		CompatibleEndpointProvider::class,
 		new ApiKeyRequestAuthentication( $api_key )
 	);
+
+	// Mark as configured so the WP 7.0 connector system and AI plugin
+	// recognise this connector as having valid credentials.
+	mark_connector_configured();
 }
 
 /**
@@ -128,6 +133,30 @@ function consolidate_connector_card( \WP_Connector_Registry $registry ): void {
 	// Register a single canonical card matching the JS SLUG so the React
 	// component in src/index.jsx renders in place of the default form.
 	if ( ! $registry->is_registered( CONNECTOR_SLUG ) ) {
+		// WP 7.0 and the AI plugin only recognise connectors whose
+		// authentication method is 'api_key'. Using 'none' caused the
+		// connector to appear as "connected" on the Connectors page but
+		// be invisible to any plugin that queries has_ai_credentials().
+		//
+		// We point setting_name at a synthetic marker option that is set
+		// to '1' during provider registration. Registering it here (before
+		// WP 7.0's init:20 _wp_register_default_connector_settings) with
+		// show_in_rest => false prevents the core REST dispatch filter from
+		// masking or validating this value as if it were a real API key.
+		$setting_name = 'ultimate_ai_connector_connected';
+
+		if ( ! isset( get_registered_settings()[ $setting_name ] ) ) {
+			register_setting(
+				'ultimate_ai_connector',
+				$setting_name,
+				[
+					'type'         => 'string',
+					'default'      => '',
+					'show_in_rest' => false,
+				]
+			);
+		}
+
 		$registry->register(
 			CONNECTOR_SLUG,
 			[
@@ -138,7 +167,8 @@ function consolidate_connector_card( \WP_Connector_Registry $registry ): void {
 				),
 				'type'           => 'ai_provider',
 				'authentication' => [
-					'method' => 'none',
+					'method'       => 'api_key',
+					'setting_name' => $setting_name,
 				],
 			]
 		);
@@ -183,4 +213,49 @@ function get_current_provider_id(): ?string {
 function get_provider_fallback( string $current_provider_id ): ?string {
 	$next = get_next_provider( $current_provider_id );
 	return $next['id'] ?? null;
+}
+
+/**
+ * Marks the connector as configured for the WP 7.0 connector system.
+ *
+ * Sets the synthetic `ultimate_ai_connector_connected` option to '1' so that
+ * any code checking the connector's setting_name (e.g. the AI plugin's
+ * `has_ai_credentials()`) sees a non-empty value and recognises this
+ * connector as having valid credentials.
+ *
+ * This is necessary because many local AI servers (Ollama, llama.cpp, LM
+ * Studio) do not require an API key, yet WP 7.0 and the AI plugin only
+ * consider connectors with authentication method 'api_key' and a non-empty
+ * setting value.
+ */
+function mark_connector_configured(): void {
+	if ( '1' !== get_option( 'ultimate_ai_connector_connected' ) ) {
+		update_option( 'ultimate_ai_connector_connected', '1', true );
+	}
+}
+
+/**
+ * Tells the AI plugin that this connector has valid credentials.
+ *
+ * Hooked to `wpai_has_ai_credentials` as a fallback in case the marker
+ * option approach is insufficient (e.g. option caching edge cases).
+ *
+ * @param bool $has_credentials Current credential status.
+ * @return bool True when at least one provider is configured.
+ */
+function filter_has_ai_credentials( bool $has_credentials ): bool {
+	if ( $has_credentials ) {
+		return $has_credentials;
+	}
+
+	// Check multi-provider config (v2.0.0+).
+	$providers = get_providers();
+	foreach ( $providers as $provider ) {
+		if ( ! empty( $provider['endpoint_url'] ) && ( $provider['enabled'] ?? true ) ) {
+			return true;
+		}
+	}
+
+	// Check legacy single-provider config.
+	return '' !== (string) get_option( 'ultimate_ai_connector_endpoint_url', '' );
 }

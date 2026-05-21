@@ -76,6 +76,12 @@ function load_sdk_dependent_classes(): void {
 	if ( function_exists( __NAMESPACE__ . '\\consolidate_connector_card' ) ) {
 		add_action( 'wp_connectors_init', __NAMESPACE__ . '\\consolidate_connector_card' );
 	}
+
+	// Tell the AI plugin (and any future consumer of this filter) that this
+	// connector has valid credentials when at least one provider is configured.
+	if ( function_exists( __NAMESPACE__ . '\\filter_has_ai_credentials' ) ) {
+		add_filter( 'wpai_has_ai_credentials', __NAMESPACE__ . '\\filter_has_ai_credentials' );
+	}
 }
 
 // Try once at file-load time (WP 7.0+ in-core SDK path), and again at
