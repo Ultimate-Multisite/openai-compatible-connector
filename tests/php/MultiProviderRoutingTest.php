@@ -303,44 +303,63 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * REGRESSION: Each ModelMetadataDirectory instance must use a cache key
-	 * scoped to its endpoint URL.
+	 * REGRESSION: The directory must not use the SDK's persistent DTO cache.
 	 *
-	 * Pre-fix behaviour: the SDK PSR-16 cache key was derived from
-	 * `static::class` alone. Because every Compatible Endpoint provider shares
-	 * the same directory class, the first endpoint to populate the SDK cache
-	 * poisoned every subsequent endpoint's model map — manifesting in the wild
-	 * as an Ollama model id being POSTed to synthetic.new's chat/completions
-	 * endpoint (HTTP 400 "Your model name should start with an hf: prefix").
+	 * Pre-fix behaviour: the SDK parent directory persisted ModelMetadata DTOs in
+	 * the WordPress object cache. Some persistent cache backends, class-loading
+	 * orders, or AI Client upgrades can hydrate those cached DTOs as
+	 * __PHP_Incomplete_Class. The AI Client then passes them into
+	 * ModelRequirements::areMetBy(), causing a TypeError during features such as
+	 * ai/meta-description and ai/content-classification.
 	 *
-	 * This test reproduces the collision directly: two directories with
-	 * distinct endpoint URLs must produce distinct base cache keys.
+	 * The connector should persist only raw model IDs/names in its own transient
+	 * and rebuild fresh ModelMetadata DTOs at read time.
 	 */
-	public function test_directory_cache_key_includes_endpoint_url() {
-		$sdk_parent = 'WordPress\\AiClient\\Providers\\OpenAiCompatibleImplementation\\AbstractOpenAiCompatibleModelMetadataDirectory';
-		if ( ! class_exists( $sdk_parent, false ) ) {
+	public function test_directory_ignores_poisoned_sdk_model_metadata_cache() {
+		$sdk_cache_interface = 'WordPress\\AiClient\\Common\\Contracts\\CachesDataInterface';
+		$model_metadata      = 'WordPress\\AiClient\\Providers\\Models\\DTO\\ModelMetadata';
+		if ( ! interface_exists( $sdk_cache_interface, false ) || ! class_exists( $model_metadata, false ) ) {
 			$this->markTestSkipped( 'AI Client SDK not available in this test environment.' );
 		}
 
+		$endpoint        = 'http://alpha.example.test/v1';
 		$directory_class = 'UltimateAiConnectorCompatibleEndpoints\\CompatibleEndpointModelDirectory';
-		$alpha           = new $directory_class( 'http://alpha.example.test/v1' );
-		$beta            = new $directory_class( 'https://beta.example.test/v1' );
+		$directory       = new $directory_class( $endpoint );
 
-		// Reach getBaseCacheKey() via reflection (protected on the SDK base).
-		$key_method = ( new \ReflectionClass( $alpha ) )->getMethod( 'getBaseCacheKey' );
-		$key_method->setAccessible( true );
+		$this->assertNotInstanceOf(
+			$sdk_cache_interface,
+			$directory,
+			'CompatibleEndpointModelDirectory must not opt into the SDK persistent DTO cache.'
+		);
 
-		$alpha_key = $key_method->invoke( $alpha );
-		$beta_key  = $key_method->invoke( $beta );
+		$raw_cache_key = 'ult_ai_connector_models_' . md5( $endpoint );
+		set_transient(
+			$raw_cache_key,
+			[
+				[
+					'id'   => 'alpha-model-1',
+					'name' => 'Alpha Model 1',
+				],
+			],
+			DAY_IN_SECONDS
+		);
 
-		$this->assertNotSame( $alpha_key, $beta_key, 'Different endpoints must yield different cache keys.' );
+		$sdk_cache_key = 'ai_client_' . \WordPress\AiClient\AiClient::VERSION
+			. '_' . md5( $directory_class )
+			. '_' . md5( $endpoint )
+			. '_models';
+		$poisoned      = @unserialize( 'O:24:"Missing_Model_Metadata_X":0:{}' );
+		wp_cache_set( $sdk_cache_key, [ 'poisoned' => $poisoned ], 'wp_ai_client', DAY_IN_SECONDS );
 
-		// Same endpoint URL must yield the same key (cache stability).
-		$alpha_dup = new $directory_class( 'http://alpha.example.test/v1' );
-		$this->assertSame( $alpha_key, $key_method->invoke( $alpha_dup ) );
+		try {
+			$models = $directory->listModelMetadata();
+		} finally {
+			delete_transient( $raw_cache_key );
+			wp_cache_delete( $sdk_cache_key, 'wp_ai_client' );
+		}
 
-		// Trailing slash normalised so http://x/v1/ and http://x/v1 share a slot.
-		$alpha_slash = new $directory_class( 'http://alpha.example.test/v1/' );
-		$this->assertSame( $alpha_key, $key_method->invoke( $alpha_slash ) );
+		$this->assertCount( 1, $models );
+		$this->assertInstanceOf( $model_metadata, $models[0] );
+		$this->assertSame( 'alpha-model-1', $models[0]->getId() );
 	}
 }

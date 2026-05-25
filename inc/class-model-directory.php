@@ -11,14 +11,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use WordPress\AiClient\Common\Exception\InvalidArgumentException;
+use WordPress\AiClient\Providers\Contracts\ModelMetadataDirectoryInterface;
+use WordPress\AiClient\Providers\Http\Contracts\WithHttpTransporterInterface;
+use WordPress\AiClient\Providers\Http\Contracts\WithRequestAuthenticationInterface;
 use WordPress\AiClient\Providers\Http\DTO\Request;
 use WordPress\AiClient\Providers\Http\DTO\Response;
 use WordPress\AiClient\Providers\Http\Enums\HttpMethodEnum;
+use WordPress\AiClient\Providers\Http\Traits\WithHttpTransporterTrait;
+use WordPress\AiClient\Providers\Http\Traits\WithRequestAuthenticationTrait;
+use WordPress\AiClient\Providers\Http\Util\ResponseUtil;
 use WordPress\AiClient\Providers\Models\DTO\ModelMetadata;
 use WordPress\AiClient\Providers\Models\DTO\SupportedOption;
 use WordPress\AiClient\Providers\Models\Enums\CapabilityEnum;
 use WordPress\AiClient\Providers\Models\Enums\OptionEnum;
-use WordPress\AiClient\Providers\OpenAiCompatibleImplementation\AbstractOpenAiCompatibleModelMetadataDirectory;
 
 /**
  * Lists available models from the configured endpoint's /models resource.
@@ -26,7 +32,10 @@ use WordPress\AiClient\Providers\OpenAiCompatibleImplementation\AbstractOpenAiCo
  * Accepts an optional endpoint URL so that each dynamic provider can pass its
  * own URL rather than falling back to the legacy single-provider static.
  */
-class CompatibleEndpointModelDirectory extends AbstractOpenAiCompatibleModelMetadataDirectory {
+class CompatibleEndpointModelDirectory implements ModelMetadataDirectoryInterface, WithHttpTransporterInterface, WithRequestAuthenticationInterface {
+
+	use WithHttpTransporterTrait;
+	use WithRequestAuthenticationTrait;
 
 	/**
 	 * The base URL for this directory instance.
@@ -39,6 +48,19 @@ class CompatibleEndpointModelDirectory extends AbstractOpenAiCompatibleModelMeta
 	private string $endpointUrl;
 
 	/**
+	 * Request-local model metadata cache.
+	 *
+	 * This intentionally stays in PHP memory only. The SDK parent directory
+	 * persists ModelMetadata DTOs into the WordPress object cache, which can be
+	 * deserialized as __PHP_Incomplete_Class by some persistent cache backends or
+	 * after AI Client class-loading/version changes. Persist raw model IDs/names in
+	 * the plugin transient instead and rebuild fresh DTOs for each request.
+	 *
+	 * @var array<string, ModelMetadata>|null
+	 */
+	private ?array $modelMetadataMap = null;
+
+	/**
 	 * @param string $endpointUrl Base URL of the AI endpoint (no trailing slash).
 	 */
 	public function __construct( string $endpointUrl = '' ) {
@@ -49,28 +71,56 @@ class CompatibleEndpointModelDirectory extends AbstractOpenAiCompatibleModelMeta
 
 	/**
 	 * {@inheritDoc}
-	 *
-	 * Mixes the endpoint URL into the base cache key so each configured
-	 * provider gets its own SDK PSR-16 cache slot.
-	 *
-	 * The parent implementation keys the cache on `static::class` alone, which
-	 * is fine for built-in single-endpoint providers but causes a critical
-	 * cross-provider collision for us: every dynamic Compatible Endpoint
-	 * provider (Ollama, synthetic.new, LM Studio, OpenRouter, …) shares the
-	 * one `CompatibleEndpointModelDirectory` class. Without this override the
-	 * first provider to populate the SDK cache poisons every subsequent
-	 * provider's model lookup with the wrong model list — manifesting as e.g.
-	 * an Ollama model id being POSTed to synthetic.new's chat/completions
-	 * endpoint.
 	 */
-	protected function getBaseCacheKey(): string {
-		return parent::getBaseCacheKey() . '_' . md5( $this->endpointUrl );
+	public function listModelMetadata(): array {
+		return array_values( $this->getModelMetadataMap() );
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
-	protected function createRequest(
+	public function hasModelMetadata( string $modelId ): bool {
+		$models_metadata = $this->getModelMetadataMap();
+
+		return isset( $models_metadata[ $modelId ] );
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public function getModelMetadata( string $modelId ): ModelMetadata {
+		$models_metadata = $this->getModelMetadataMap();
+
+		if ( ! isset( $models_metadata[ $modelId ] ) ) {
+			throw new InvalidArgumentException( sprintf( 'No model with ID %s was found in the provider', $modelId ) );
+		}
+
+		return $models_metadata[ $modelId ];
+	}
+
+	/**
+	 * Returns a request-local map of model ID to model metadata.
+	 *
+	 * @return array<string, ModelMetadata> Map of model ID to model metadata.
+	 */
+	private function getModelMetadataMap(): array {
+		if ( null === $this->modelMetadataMap ) {
+			$this->modelMetadataMap = $this->sendListModelsRequest();
+		}
+
+		return $this->modelMetadataMap;
+	}
+
+	/**
+	 * Creates a request for the endpoint API.
+	 *
+	 * @param HttpMethodEnum                 $method HTTP method.
+	 * @param string                         $path API path relative to endpoint URL.
+	 * @param array<string, string|string[]> $headers Request headers.
+	 * @param string|array<string, mixed>|null $data Request data.
+	 * @return Request Request DTO.
+	 */
+	private function createRequest(
 		HttpMethodEnum $method,
 		string $path,
 		array $headers = [],
@@ -85,21 +135,21 @@ class CompatibleEndpointModelDirectory extends AbstractOpenAiCompatibleModelMeta
 	}
 
 	/**
-	 * {@inheritDoc}
+	 * Sends the /models request and returns a map of model metadata.
 	 *
-	 * Wraps the parent HTTP request with a WordPress transient so the /models
+	 * Wraps the HTTP request with a WordPress transient so the /models
 	 * endpoint is only called once per 24 hours (or until the transient expires
-	 * or is deleted). The SDK's built-in PSR-16 object-cache layer is per-
-	 * request on sites without Redis/Memcached, making it useless in standard
-	 * php-fpm or FrankenPHP environments.
+	 * or is deleted).
 	 *
 	 * Raw model data (id + name) is stored rather than serialised ModelMetadata
-	 * objects to avoid recreating AbstractEnum instances that fail the strict
-	 * (===) singleton identity checks used by the SDK's PromptBuilder internals.
+	 * objects to avoid persistent object-cache deserialization into
+	 * __PHP_Incomplete_Class and to avoid recreating AbstractEnum instances that
+	 * fail the strict (===) singleton identity checks used by the SDK's
+	 * PromptBuilder internals.
 	 *
 	 * @return array<string, ModelMetadata> Map of model ID to model metadata.
 	 */
-	protected function sendListModelsRequest(): array {
+	private function sendListModelsRequest(): array {
 		$endpoint_url = $this->endpointUrl;
 		$cache_key    = 'ult_ai_connector_models_' . md5( $endpoint_url );
 
@@ -110,8 +160,17 @@ class CompatibleEndpointModelDirectory extends AbstractOpenAiCompatibleModelMeta
 			return $this->buildModelMetadataMapFromRaw( $cached );
 		}
 
-		// Cache miss: make the live HTTP request via the parent implementation.
-		$map = parent::sendListModelsRequest();
+		// Cache miss: make the live HTTP request.
+		$http_transporter = $this->getHttpTransporter();
+		$request          = $this->createRequest( HttpMethodEnum::GET(), 'models' );
+		$request          = $this->getRequestAuthentication()->authenticateRequest( $request );
+		$response         = $http_transporter->send( $request );
+		ResponseUtil::throwIfNotSuccessful( $response );
+
+		$map = [];
+		foreach ( $this->parseResponseToModelMetadataList( $response ) as $metadata ) {
+			$map[ $metadata->getId() ] = $metadata;
+		}
 
 		if ( ! empty( $map ) ) {
 			$raw = [];
@@ -173,11 +232,13 @@ class CompatibleEndpointModelDirectory extends AbstractOpenAiCompatibleModelMeta
 	}
 
 	/**
-	 * {@inheritDoc}
+	 * Parses the API models response into model metadata DTOs.
 	 *
 	 * @phpstan-type ModelsResponseData array{data?: list<array{id: string, name?: string}>}
+	 * @param Response $response Response from the models endpoint.
+	 * @return list<ModelMetadata> List of model metadata DTOs.
 	 */
-	protected function parseResponseToModelMetadataList( Response $response ): array {
+	private function parseResponseToModelMetadataList( Response $response ): array {
 		/** @var ModelsResponseData $responseData */
 		$responseData = $response->getData();
 
