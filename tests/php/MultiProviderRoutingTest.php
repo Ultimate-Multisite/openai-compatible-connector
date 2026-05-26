@@ -318,7 +318,8 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 	public function test_directory_ignores_poisoned_sdk_model_metadata_cache() {
 		$sdk_cache_interface = 'WordPress\\AiClient\\Common\\Contracts\\CachesDataInterface';
 		$model_metadata      = 'WordPress\\AiClient\\Providers\\Models\\DTO\\ModelMetadata';
-		if ( ! interface_exists( $sdk_cache_interface, false ) || ! class_exists( $model_metadata, false ) ) {
+		$ai_client_class     = 'WordPress\\AiClient\\AiClient';
+		if ( ! interface_exists( $sdk_cache_interface ) || ! class_exists( $model_metadata ) || ! class_exists( $ai_client_class ) ) {
 			$this->markTestSkipped( 'AI Client SDK not available in this test environment.' );
 		}
 
