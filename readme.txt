@@ -3,7 +3,7 @@ Contributors: superdav42
 Tags: ai, connector, ollama, llm, local-ai
 Requires at least: 6.9
 Tested up to: 7.0
-Stable tag: 2.1.1
+Stable tag: 2.1.2
 Requires PHP: 7.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -77,6 +77,11 @@ Yes, provided the Gutenberg plugin (version 23.0 or later) is active. Gutenberg 
 2. Model selection in the WordPress AI Client — all models from your endpoint appear automatically.
 
 == Changelog ==
+
+= 2.1.2 - Released on 2026-05-26 =
+
+* Fix: Connector now ignores the AI Client's persistent model metadata cache and rebuilds fresh model lists, preventing stale or corrupted model entries across cache backends and SDK updates.
+* Fix: Plugin now defers SDK-dependent loading until the AI Client SDK is available, so companion plugins on WordPress 6.9 can register the connector reliably.
 
 = 2.1.1 - Released on 2026-05-21 =
 
