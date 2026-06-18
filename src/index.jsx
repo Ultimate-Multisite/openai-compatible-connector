@@ -464,6 +464,17 @@ function CompatibleEndpointConnectorCard( { slug, label, description, logo } ) {
 		fetchSettings();
 	}, [ fetchSettings ] );
 
+	// Fetch models for all providers once initial settings are loaded.
+	useEffect( () => {
+		if ( ! isLoading ) {
+			providers.forEach( ( provider ) => {
+				if ( provider.endpoint_url && provider.id ) {
+					fetchModelsForUrl( provider.endpoint_url, provider.id );
+				}
+			} );
+		}
+	}, [ isLoading ] );
+
 	/**
 	 * Fetch models for an endpoint URL.
 	 */
