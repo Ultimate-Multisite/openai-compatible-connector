@@ -48,6 +48,16 @@ class CompatibleEndpointModelDirectory implements ModelMetadataDirectoryInterfac
 	private string $endpointUrl;
 
 	/**
+	 * The default model ID for this provider, if any.
+	 *
+	 * When set, listModelMetadata() sorts the results so this model appears first,
+	 * giving it priority during SDK auto-discovery.
+	 *
+	 * @var string
+	 */
+	private string $defaultModel = '';
+
+	/**
 	 * Request-local model metadata cache.
 	 *
 	 * This intentionally stays in PHP memory only. The SDK parent directory
@@ -61,19 +71,31 @@ class CompatibleEndpointModelDirectory implements ModelMetadataDirectoryInterfac
 	private ?array $modelMetadataMap = null;
 
 	/**
-	 * @param string $endpointUrl Base URL of the AI endpoint (no trailing slash).
+	 * @param string $endpointUrl  Base URL of the AI endpoint (no trailing slash).
+	 * @param string $defaultModel Default model ID to sort first in listings.
 	 */
-	public function __construct( string $endpointUrl = '' ) {
+	public function __construct( string $endpointUrl = '', string $defaultModel = '' ) {
 		$this->endpointUrl = $endpointUrl !== ''
 			? rtrim( $endpointUrl, '/' )
 			: rtrim( CompatibleEndpointProvider::$endpointUrl, '/' );
+		$this->defaultModel = $defaultModel;
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function listModelMetadata(): array {
-		return array_values( $this->getModelMetadataMap() );
+		$models = $this->getModelMetadataMap();
+
+		// When a default model is configured, sort it first so SDK auto-discovery
+		// picks it over other models with the same capabilities.
+		if ( $this->defaultModel !== '' && isset( $models[ $this->defaultModel ] ) ) {
+			$default = $models[ $this->defaultModel ];
+			unset( $models[ $this->defaultModel ] );
+			array_unshift( $models, $default );
+		}
+
+		return array_values( $models );
 	}
 
 	/**

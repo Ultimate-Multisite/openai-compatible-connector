@@ -54,6 +54,13 @@ class DynamicCompatibleEndpointProvider extends AbstractApiProvider {
 	public static string $endpointUrl = '';
 
 	/**
+	 * Default model ID to use when none is explicitly specified.
+	 *
+	 * @var string
+	 */
+	public static string $defaultModel = '';
+
+	/**
 	 * Request timeout in seconds.
 	 *
 	 * @var int
@@ -159,7 +166,7 @@ class DynamicCompatibleEndpointProvider extends AbstractApiProvider {
 	 * {@inheritDoc}
 	 */
 	protected static function createModelMetadataDirectory(): ModelMetadataDirectoryInterface {
-		return new CompatibleEndpointModelDirectory( static::$endpointUrl );
+		return new CompatibleEndpointModelDirectory( static::$endpointUrl, static::$defaultModel );
 	}
 }
 
@@ -229,13 +236,15 @@ class ProviderFactory {
 
 		// Define the dynamic class only if not already defined.
 		if ( ! class_exists( $class_name, false ) ) {
-			$endpoint_url = $config['endpoint_url'] ?? '';
-			$timeout      = (int) ( $config['timeout'] ?? 360 );
+			$endpoint_url  = $config['endpoint_url'] ?? '';
+			$default_model = $config['default_model'] ?? '';
+			$timeout       = (int) ( $config['timeout'] ?? 360 );
 
 			// Escape values for embedding in a PHP single-quoted string.
 			$escaped_id            = addcslashes( $id, "'\\" );
 			$escaped_name          = addcslashes( $name, "'\\" );
 			$escaped_endpoint_url  = addcslashes( $endpoint_url, "'\\" );
+			$escaped_default_model = addcslashes( $default_model, "'\\" );
 			$escaped_sdk_id        = addcslashes( $sdk_provider_id, "'\\" );
 
 			$base = self::FQ_BASE_CLASS;
@@ -246,6 +255,7 @@ class ProviderFactory {
 					public static string \$providerId = '{$escaped_id}';
 					public static string \$providerName = '{$escaped_name}';
 					public static string \$endpointUrl = '{$escaped_endpoint_url}';
+					public static string \$defaultModel = '{$escaped_default_model}';
 					public static int \$timeout = {$timeout};
 					public static string \$sdkProviderId = '{$escaped_sdk_id}';
 				}"
