@@ -473,7 +473,7 @@ function CompatibleEndpointConnectorCard( { slug, label, description, logo } ) {
 				}
 			} );
 		}
-	}, [ isLoading ] );
+	}, [ isLoading, providers ] );
 
 	/**
 	 * Fetch models for an endpoint URL.
