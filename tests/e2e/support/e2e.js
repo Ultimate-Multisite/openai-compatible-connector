@@ -12,9 +12,18 @@ const WP_ADMIN_PASSWORD = Cypress.env( 'WP_ADMIN_PASSWORD' ) || 'password';
  * Log in to the WordPress admin dashboard.
  */
 Cypress.Commands.add( 'wpLogin', ( username = WP_ADMIN_USER, password = WP_ADMIN_PASSWORD ) => {
-	cy.visit( '/wp-login.php' );
-	cy.get( '#user_login' ).clear().type( username );
-	cy.get( '#user_pass' ).clear().type( password );
-	cy.get( '#wp-submit' ).click();
-	cy.url().should( 'contain', 'wp-admin' );
+	cy.request( {
+		method: 'POST',
+		url: '/wp-login.php',
+		form: true,
+		body: {
+			log: username,
+			pwd: password,
+			'wp-submit': 'Log In',
+			redirect_to: '/wp-admin/',
+			testcookie: 1,
+		},
+	} );
+	cy.visit( '/wp-admin/' );
+	cy.location( 'pathname' ).should( 'contain', 'wp-admin' );
 } );

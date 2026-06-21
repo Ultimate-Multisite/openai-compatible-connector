@@ -37,6 +37,13 @@ class CompatibleEndpointProvider extends AbstractApiProvider {
 	public static string $endpointUrl = '';
 
 	/**
+	 * Default model ID to use when none is explicitly specified.
+	 *
+	 * @var string
+	 */
+	public static string $defaultModel = '';
+
+	/**
 	 * {@inheritDoc}
 	 */
 	protected static function baseUrl(): string {
@@ -106,6 +113,6 @@ class CompatibleEndpointProvider extends AbstractApiProvider {
 	 * {@inheritDoc}
 	 */
 	protected static function createModelMetadataDirectory(): ModelMetadataDirectoryInterface {
-		return new CompatibleEndpointModelDirectory();
+		return new CompatibleEndpointModelDirectory( '', self::$defaultModel );
 	}
 }
