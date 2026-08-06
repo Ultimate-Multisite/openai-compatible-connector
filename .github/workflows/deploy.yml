@@ -81,11 +81,15 @@ jobs:
           extensions: mbstring, intl
           coverage: none
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
 
       - name: Install WP-CLI
         run: |
@@ -96,10 +100,10 @@ jobs:
       - name: Install dependencies
         run: |
           composer install --no-dev --optimize-autoloader
-          npm ci
+          pnpm install --frozen-lockfile
 
-      - name: Build plugin
-        run: npm run build
+      - name: Build plugin archive
+        run: pnpm run release
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -127,11 +131,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -143,10 +151,10 @@ jobs:
       - name: Install dependencies
         run: |
           composer install --no-dev --optimize-autoloader
-          npm ci
+          pnpm install --frozen-lockfile
 
       - name: Build plugin
-        run: npm run build
+        run: pnpm run build
 
       - name: Deploy to WordPress.org SVN
         uses: 10up/action-wordpress-plugin-deploy@stable

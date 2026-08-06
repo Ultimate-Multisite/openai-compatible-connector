@@ -43,6 +43,7 @@
     },
     "archive": {
         "exclude": [
+            ".git",
             "AGENTS.md",
             "tests",
             "cypress.env.json",
@@ -61,7 +62,9 @@
             ".phpunit.result.cache",
             "build.sh",
             "package.json",
-            "package-lock.json",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml",
+            ".npmrc",
             "setuptest.sh",
             "utils",
             "update.sh",

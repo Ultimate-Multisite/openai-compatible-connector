@@ -39,7 +39,9 @@ cypress.config.dev.js
 cypress.config.test.js
 cypress.env.json
 package.json
-package-lock.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+.npmrc
 phpstan.neon.dist
 phpunit.xml.dist
 rector.php
