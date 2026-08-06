@@ -21,20 +21,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install Node dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build plugin assets
-        run: npm run build
+        run: pnpm run build
 
       - name: Start wp-env
-        run: npx wp-env start
+        run: pnpm exec wp-env start
         timeout-minutes: 10
         env:
           WP_ENV_HOME: /tmp/wp-env
@@ -57,7 +62,7 @@ jobs:
           fi
 
       - name: Run Cypress E2E tests
-        run: npx cypress run
+        run: pnpm exec cypress run
         env:
           WP_BASE_URL: http://localhost:8888
           CYPRESS_WP_ADMIN_USER: admin
@@ -82,6 +87,6 @@ jobs:
 
       - name: Stop wp-env
         if: always()
-        run: npx wp-env stop
+        run: pnpm exec wp-env stop
         env:
           WP_ENV_HOME: /tmp/wp-env

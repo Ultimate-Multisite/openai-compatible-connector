@@ -6,13 +6,13 @@ WordPress plugin that registers an AI Client provider for Ollama, LM Studio, or 
 
 ```bash
 # Install dependencies
-npm install
+ pnpm install
 
 # Development build with watch
-npm run start
+ pnpm run start
 
 # Production build
-npm run build
+ pnpm run build
 ```
 
 Output: `build/connector.js` (ES module for WordPress Script Modules API).
@@ -23,9 +23,9 @@ Output: `build/connector.js` (ES module for WordPress Script Modules API).
 
 ```bash
 # Via the shared WordPress tests library (recommended):
-npm run test:php:setup
-npm run test:php
-npm run test:php:testdox
+ pnpm run test:php:setup
+ pnpm run test:php
+ pnpm run test:php:testdox
 
 # Via standalone install (CI):
 composer install
@@ -39,13 +39,13 @@ Test files: `tests/php/*Test.php`. Bootstrap: `tests/bootstrap.php`.
 
 ```bash
 # Start wp-env first:
-npm run wp-env:start
+ pnpm run wp-env:start
 
 # Run headless:
-npm run test:e2e
+ pnpm run test:e2e
 
 # Open interactive:
-npm run test:e2e:open
+ pnpm run test:e2e:open
 ```
 
 Test files: `tests/e2e/*.cy.js`. Config: `cypress.config.js`.
@@ -53,9 +53,9 @@ Test files: `tests/e2e/*.cy.js`. Config: `cypress.config.js`.
 ### wp-env
 
 ```bash
-npm run wp-env:start   # Start WordPress 6.9 + plugin
-npm run wp-env:stop    # Stop
-npm run wp-env:clean   # Reset
+ pnpm run wp-env:start   # Start WordPress 6.9 + plugin
+ pnpm run wp-env:stop    # Stop
+ pnpm run wp-env:clean   # Reset
 ```
 
 Config: `.wp-env.json`. Override ports: `.wp-env.override.json` (gitignored).
@@ -77,8 +77,8 @@ composer require --dev wp-coding-standards/wpcs
 ./vendor/bin/phpcs --standard=WordPress inc/ *.php
 
 # If adding JS linting later:
-npm install --save-dev @wordpress/eslint-plugin
-npx eslint src/
+ pnpm add --save-dev @wordpress/eslint-plugin
+ pnpm exec eslint src/
 ```
 
 ## Code Style
