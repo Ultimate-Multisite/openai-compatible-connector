@@ -23,6 +23,7 @@
 		"wp-env:clean": "wp-env clean all"
 	},
 	"devDependencies": {
+		"@babel/core": "7.29.0",
 		"@babel/plugin-transform-react-jsx": "7.28.6",
 		"@babel/preset-env": "7.29.0",
 		"@wordpress/env": "^10.39.0",

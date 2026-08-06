@@ -90,7 +90,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'pnpm'
 
       - name: Install WP-CLI
         run: |
@@ -141,7 +140,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'pnpm'
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
