@@ -3,6 +3,7 @@
  * Plugin Name: Ultimate AI Connector for Compatible Endpoints
  * Description: Registers an AI Client provider for Ollama, LM Studio, or any AI endpoint using the standard chat completions API format.
  * Requires at least: 6.9
+ * Tested up to: 7.1
  * Requires PHP: 7.4
  * Version: 2.1.2
  * Author: Ultimate Multisite Community
