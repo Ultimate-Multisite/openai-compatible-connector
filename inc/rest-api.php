@@ -42,6 +42,11 @@ function register_models_route(): void {
 					'type'              => 'string',
 					'sanitize_callback' => 'sanitize_text_field',
 				],
+				'config_id'    => [
+					'required'          => false,
+					'type'              => 'string',
+					'sanitize_callback' => 'sanitize_text_field',
+				],
 			],
 		]
 	);
@@ -57,36 +62,57 @@ function rest_list_models( \WP_REST_Request $request ) {
 	$endpoint_url = $request->get_param( 'endpoint_url' );
 	$api_key      = $request->get_param( 'api_key' );
 	$provider_id  = $request->get_param( 'provider_id' );
+	$config_id    = $request->get_param( 'config_id' );
+	$resolved     = null;
+
+	// The Connectors UI knows the stable config ID, while SDK consumers know
+	// the registration-order provider ID. Support both without exposing saved
+	// API keys to the browser or placing them in query strings.
+	if ( ! empty( $config_id ) ) {
+		$resolved = get_provider( (string) $config_id );
+	} elseif ( ! empty( $provider_id ) ) {
+		$resolved = get_provider_by_sdk_id( (string) $provider_id );
+	}
 
 	if ( empty( $endpoint_url ) ) {
 		// Resolution order:
-		// 1. If a specific SDK provider ID was requested, look up that provider.
+		// 1. If a config or SDK provider ID was requested, use that provider.
 		//    This is the multi-provider path used by the AI Agent loop and the
 		//    `wp sd-ai-agent models --provider=...` CLI command — without this,
 		//    every OpenAI-compatible provider would resolve to the same primary
 		//    config and the agent would see duplicate model lists.
 		// 2. Otherwise, fall back to the highest-priority configured provider.
 		// 3. Finally, fall back to the legacy single-provider option.
-		$resolved = null;
-		if ( ! empty( $provider_id ) ) {
-			$resolved = get_provider_by_sdk_id( (string) $provider_id );
-		}
 		if ( null === $resolved ) {
 			$resolved = get_primary_provider();
 		}
 		if ( $resolved ) {
 			$endpoint_url = $resolved['endpoint_url'] ?? '';
-			if ( null === $api_key ) {
-				$api_key = $resolved['api_key'] ?? '';
-			}
 		} else {
 			// Fall back to legacy single-provider option.
 			$endpoint_url = get_option( 'ultimate_ai_connector_endpoint_url', '' );
 		}
 	}
 
+	// Reuse a saved provider key only when the request targets that provider's
+	// exact endpoint. This prevents a caller from pairing a config ID with an
+	// arbitrary URL and forwarding the stored credential to another host.
+	if (
+		null === $api_key &&
+		is_array( $resolved ) &&
+		rtrim( (string) ( $resolved['endpoint_url'] ?? '' ), '/' ) === rtrim( (string) $endpoint_url, '/' )
+	) {
+		$api_key = $resolved['api_key'] ?? '';
+	}
+
 	if ( null === $api_key ) {
-		$api_key = get_option( 'ultimate_ai_connector_api_key', '' );
+		$legacy_endpoint_url = (string) get_option( 'ultimate_ai_connector_endpoint_url', '' );
+		if (
+			'' !== $legacy_endpoint_url &&
+			rtrim( $legacy_endpoint_url, '/' ) === rtrim( (string) $endpoint_url, '/' )
+		) {
+			$api_key = get_option( 'ultimate_ai_connector_api_key', '' );
+		}
 	}
 
 	if ( empty( $endpoint_url ) ) {

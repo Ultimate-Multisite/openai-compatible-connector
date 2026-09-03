@@ -83,6 +83,13 @@ function generateProviderId() {
 }
 
 /**
+ * Build a model-cache key scoped to both the provider config and endpoint URL.
+ */
+function getModelsCacheKey( configId, url ) {
+	return 'models_' + configId + '_' + url;
+}
+
+/**
  * "ANY LLM" text icon used as the connector logo.
  */
 function Logo() {
@@ -478,16 +485,19 @@ function CompatibleEndpointConnectorCard( { slug, label, description, logo } ) {
 	/**
 	 * Fetch models for an endpoint URL.
 	 */
-	const fetchModelsForUrl = useCallback( async ( url, key ) => {
-		if ( ! url || ! key ) {
+	const fetchModelsForUrl = useCallback( async ( url, configId ) => {
+		if ( ! url || ! configId ) {
 			return;
 		}
-		const cacheKey = 'models_' + key;
+		const cacheKey = getModelsCacheKey( configId, url );
 		if ( modelsCache[ cacheKey ] ) {
 			return;
 		}
 		try {
-			const params = new URLSearchParams( { endpoint_url: url } );
+			const params = new URLSearchParams( {
+				endpoint_url: url,
+				config_id: configId,
+			} );
 			const result = await apiFetch( {
 				path: '/ultimate-ai-connector-compatible-endpoints/v1/models?' + params.toString(),
 			} );
@@ -653,7 +663,7 @@ function CompatibleEndpointConnectorCard( { slug, label, description, logo } ) {
 					onRemove={ () => removeProvider( index ) }
 					isSaving={ isSaving }
 					saveError={ null }
-					models={ modelsCache[ 'models_' + provider.id ] || [] }
+					models={ modelsCache[ getModelsCacheKey( provider.id, provider.endpoint_url ) ] || [] }
 					isLoadingModels={ false }
 				/>
 			) ) }

@@ -46,6 +46,11 @@ function register_provider(): void {
 		return;
 	}
 
+	// The WordPress AI plugin applies its built-in model preferences before the
+	// SDK's normal first-model fallback. Put configured connector defaults ahead
+	// of those preferences so the Default Model setting is actually honoured.
+	add_filter( 'wpai_preferred_text_models', __NAMESPACE__ . '\\filter_preferred_text_models', 5 );
+
 	// Try multi-provider config first (v2.0.0+).
 	$providers = get_providers();
 	if ( ! empty( $providers ) ) {
@@ -183,6 +188,49 @@ function consolidate_connector_card( \WP_Connector_Registry $registry ): void {
  */
 function get_default_model(): string {
 	return (string) get_option( 'ultimate_ai_connector_default_model', '' );
+}
+
+/**
+ * Prepends configured connector defaults to the AI plugin's model preferences.
+ *
+ * Each preference is a provider/model tuple understood by the AI Client SDK.
+ * Multi-provider SDK IDs follow enabled registration order, matching
+ * ProviderFactory::registerAllProviders().
+ *
+ * @param array<int, mixed> $preferred_models Existing preferred models.
+ * @return array<int, mixed> Connector defaults followed by existing preferences.
+ */
+function filter_preferred_text_models( array $preferred_models ): array {
+	$connector_preferences = [];
+	$providers             = get_providers_ordered();
+	$index                 = 0;
+
+	foreach ( $providers as $provider ) {
+		if ( empty( $provider['endpoint_url'] ) || ! ( $provider['enabled'] ?? true ) ) {
+			continue;
+		}
+
+		$default_model = (string) ( $provider['default_model'] ?? '' );
+		if ( '' !== $default_model ) {
+			$connector_preferences[] = [
+				sdk_provider_id_for_index( $index ),
+				$default_model,
+			];
+		}
+
+		++$index;
+	}
+
+	if ( empty( $providers ) ) {
+		$endpoint_url  = (string) get_option( 'ultimate_ai_connector_endpoint_url', '' );
+		$default_model = (string) get_option( 'ultimate_ai_connector_default_model', '' );
+
+		if ( '' !== $endpoint_url && '' !== $default_model ) {
+			$connector_preferences[] = [ CONNECTOR_SLUG, $default_model ];
+		}
+	}
+
+	return array_merge( $connector_preferences, $preferred_models );
 }
 
 /**
