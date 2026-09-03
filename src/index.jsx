@@ -478,16 +478,19 @@ function CompatibleEndpointConnectorCard( { slug, label, description, logo } ) {
 	/**
 	 * Fetch models for an endpoint URL.
 	 */
-	const fetchModelsForUrl = useCallback( async ( url, key ) => {
-		if ( ! url || ! key ) {
+	const fetchModelsForUrl = useCallback( async ( url, configId ) => {
+		if ( ! url || ! configId ) {
 			return;
 		}
-		const cacheKey = 'models_' + key;
+		const cacheKey = 'models_' + configId;
 		if ( modelsCache[ cacheKey ] ) {
 			return;
 		}
 		try {
-			const params = new URLSearchParams( { endpoint_url: url } );
+			const params = new URLSearchParams( {
+				endpoint_url: url,
+				config_id: configId,
+			} );
 			const result = await apiFetch( {
 				path: '/ultimate-ai-connector-compatible-endpoints/v1/models?' + params.toString(),
 			} );

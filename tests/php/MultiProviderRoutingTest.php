@@ -36,6 +36,13 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 	private array $captured_urls = [];
 
 	/**
+	 * Captured outgoing HTTP request headers, keyed by request URL.
+	 *
+	 * @var array<string, array<string, string>>
+	 */
+	private array $captured_headers = [];
+
+	/**
 	 * Stub /models response payload returned by the http filter.
 	 *
 	 * Distinct payload per endpoint URL so tests can prove the right one
@@ -54,8 +61,9 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 		delete_option( 'ultimate_ai_connector_endpoint_url' );
 		delete_option( 'ultimate_ai_connector_api_key' );
 		remove_all_filters( 'pre_http_request' );
-		$this->captured_urls  = [];
-		$this->stub_responses = [];
+		$this->captured_urls    = [];
+		$this->captured_headers = [];
+		$this->stub_responses   = [];
 		parent::tear_down();
 	}
 
@@ -119,7 +127,8 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 	 * @return array|mixed Stubbed wp_remote_get response or $pre.
 	 */
 	public function short_circuit_http( $pre, $args, $url ) {
-		$this->captured_urls[] = $url;
+		$this->captured_urls[]          = $url;
+		$this->captured_headers[ $url ] = $args['headers'] ?? [];
 
 		if ( ! isset( $this->stub_responses[ $url ] ) ) {
 			return $pre;
@@ -243,6 +252,67 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 		// Each request hit its own /models URL.
 		$this->assertContains( 'http://alpha.example.test/v1/models', $this->captured_urls );
 		$this->assertContains( 'https://beta.example.test/v1/models', $this->captured_urls );
+		$this->assertSame(
+			'Bearer beta-key',
+			$this->captured_headers['https://beta.example.test/v1/models']['Authorization'] ?? ''
+		);
+	}
+
+	/**
+	 * The Connectors UI config ID must resolve the saved key without exposing it.
+	 */
+	public function test_rest_list_models_uses_saved_key_for_matching_config_endpoint() {
+		$this->set_up_two_providers();
+
+		$request = new WP_REST_Request( 'GET' );
+		$request->set_param( 'config_id', 'provider_beta' );
+		$request->set_param( 'endpoint_url', 'https://beta.example.test/v1' );
+		$response = \UltimateAiConnectorCompatibleEndpoints\rest_list_models( $request );
+
+		$this->assertNotInstanceOf( \WP_Error::class, $response );
+		$this->assertSame(
+			'Bearer beta-key',
+			$this->captured_headers['https://beta.example.test/v1/models']['Authorization'] ?? ''
+		);
+	}
+
+	/**
+	 * A config ID must never forward its saved key to a different endpoint.
+	 */
+	public function test_rest_list_models_does_not_send_saved_key_to_overridden_endpoint() {
+		$this->set_up_two_providers();
+
+		$request = new WP_REST_Request( 'GET' );
+		$request->set_param( 'config_id', 'provider_alpha' );
+		$request->set_param( 'endpoint_url', 'https://beta.example.test/v1' );
+		$response = \UltimateAiConnectorCompatibleEndpoints\rest_list_models( $request );
+
+		$this->assertNotInstanceOf( \WP_Error::class, $response );
+		$this->assertArrayNotHasKey(
+			'Authorization',
+			$this->captured_headers['https://beta.example.test/v1/models'] ?? []
+		);
+	}
+
+	/**
+	 * Connector defaults must precede the AI plugin's built-in preferences.
+	 */
+	public function test_configured_defaults_precede_existing_model_preferences() {
+		if ( ! function_exists( 'UltimateAiConnectorCompatibleEndpoints\\filter_preferred_text_models' ) ) {
+			$this->markTestSkipped( 'AI Client SDK not available in this test environment.' );
+		}
+
+		$this->set_up_two_providers();
+
+		$preferences = \UltimateAiConnectorCompatibleEndpoints\filter_preferred_text_models(
+			[ [ 'openai', 'gpt-4.1' ] ]
+		);
+
+		$this->assertSame(
+			[ 'ai-provider-for-any-openai-compatible-2', 'beta-model' ],
+			$preferences[0]
+		);
+		$this->assertSame( [ 'openai', 'gpt-4.1' ], $preferences[1] );
 	}
 
 	/**

@@ -95,6 +95,30 @@ class CompatibleEndpointModel extends AbstractOpenAiCompatibleTextGenerationMode
 	}
 
 	/**
+	 * Prepares a standards-compatible structured response format.
+	 *
+	 * The AI Client SDK passes the raw JSON Schema directly as `json_schema`.
+	 * Strict OpenAI-compatible gateways, including LiteLLM, expect that value
+	 * to be a named envelope whose `schema` member contains the raw schema.
+	 *
+	 * @param array<string, mixed>|null $outputSchema The requested output schema.
+	 * @return array<string, mixed> The OpenAI-compatible response format.
+	 */
+	protected function prepareResponseFormatParam( ?array $outputSchema ): array {
+		if ( ! is_array( $outputSchema ) ) {
+			return parent::prepareResponseFormatParam( $outputSchema );
+		}
+
+		return [
+			'type'        => 'json_schema',
+			'json_schema' => [
+				'name'   => 'wordpress_response',
+				'schema' => $outputSchema,
+			],
+		];
+	}
+
+	/**
 	 * Prepares the API request parameters with optional thinking-mode support.
 	 *
 	 * When the provider is configured for a thinking-aware endpoint type
