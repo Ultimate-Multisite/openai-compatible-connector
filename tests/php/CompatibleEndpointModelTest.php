@@ -20,7 +20,7 @@ class CompatibleEndpointModelTest extends WP_UnitTestCase {
 	/**
 	 * Structured output must use the standard named JSON Schema envelope.
 	 */
-	public function test_response_format_wraps_json_schema() {
+	public function test_response_format_wraps_json_schema(): void {
 		$parent_class = 'WordPress\\AiClient\\Providers\\OpenAiCompatibleImplementation\\AbstractOpenAiCompatibleTextGenerationModel';
 		if ( ! class_exists( $parent_class ) ) {
 			$this->markTestSkipped( 'AI Client SDK not available in this test environment.' );

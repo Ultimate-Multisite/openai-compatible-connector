@@ -106,7 +106,13 @@ function rest_list_models( \WP_REST_Request $request ) {
 	}
 
 	if ( null === $api_key ) {
-		$api_key = get_option( 'ultimate_ai_connector_api_key', '' );
+		$legacy_endpoint_url = (string) get_option( 'ultimate_ai_connector_endpoint_url', '' );
+		if (
+			'' !== $legacy_endpoint_url &&
+			rtrim( $legacy_endpoint_url, '/' ) === rtrim( (string) $endpoint_url, '/' )
+		) {
+			$api_key = get_option( 'ultimate_ai_connector_api_key', '' );
+		}
 	}
 
 	if ( empty( $endpoint_url ) ) {

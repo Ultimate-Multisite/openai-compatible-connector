@@ -261,7 +261,7 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 	/**
 	 * The Connectors UI config ID must resolve the saved key without exposing it.
 	 */
-	public function test_rest_list_models_uses_saved_key_for_matching_config_endpoint() {
+	public function test_rest_list_models_uses_saved_key_for_matching_config_endpoint(): void {
 		$this->set_up_two_providers();
 
 		$request = new WP_REST_Request( 'GET' );
@@ -279,7 +279,7 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 	/**
 	 * A config ID must never forward its saved key to a different endpoint.
 	 */
-	public function test_rest_list_models_does_not_send_saved_key_to_overridden_endpoint() {
+	public function test_rest_list_models_does_not_send_saved_key_to_overridden_endpoint(): void {
 		$this->set_up_two_providers();
 
 		$request = new WP_REST_Request( 'GET' );
@@ -295,9 +295,28 @@ class MultiProviderRoutingTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * A legacy saved key must not be sent to a caller-selected endpoint.
+	 */
+	public function test_rest_list_models_does_not_send_legacy_key_to_overridden_endpoint(): void {
+		$this->set_up_two_providers();
+		update_option( 'ultimate_ai_connector_endpoint_url', 'http://legacy.example.test/v1' );
+		update_option( 'ultimate_ai_connector_api_key', 'legacy-key' );
+
+		$request = new WP_REST_Request( 'GET' );
+		$request->set_param( 'endpoint_url', 'https://beta.example.test/v1' );
+		$response = \UltimateAiConnectorCompatibleEndpoints\rest_list_models( $request );
+
+		$this->assertNotInstanceOf( \WP_Error::class, $response );
+		$this->assertArrayNotHasKey(
+			'Authorization',
+			$this->captured_headers['https://beta.example.test/v1/models'] ?? []
+		);
+	}
+
+	/**
 	 * Connector defaults must precede the AI plugin's built-in preferences.
 	 */
-	public function test_configured_defaults_precede_existing_model_preferences() {
+	public function test_configured_defaults_precede_existing_model_preferences(): void {
 		if ( ! function_exists( 'UltimateAiConnectorCompatibleEndpoints\\filter_preferred_text_models' ) ) {
 			$this->markTestSkipped( 'AI Client SDK not available in this test environment.' );
 		}
